@@ -1,0 +1,19 @@
+{
+  "language": "auto",
+  "weeks": 8,
+  "projects": {
+    "shop-api": "Shop backend",
+    "shop-app": "Shop app"
+  },
+  "aliases": {
+    "Checkout v2": "Checkout redesign"
+  },
+  "merge_groups": [
+    { "name": "Docs site", "contains_all": ["docs", "site"] }
+  ],
+  "judgment_keywords": ["architect", "design", "strateg", "review", "legal", "decid", "audit"],
+  "scheduled_prefixes": ["nightly", "weekly report"],
+  "prices": {
+    "opus": { "in": 4.0, "out": 20.0, "cr": 0.20 }
+  }
+}

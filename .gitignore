@@ -1,0 +1,6 @@
+# Generated demo output and logs are rebuilt by the examples/ scripts
+examples/demo-logs/
+__pycache__/
+*.pyc
+threadeyes-output/
+threadeyes.json
