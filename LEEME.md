@@ -66,6 +66,22 @@ Si tus nombres son otros, copia `threadeyes.example.json` a `threadeyes.json` (j
 - **Tipo de trabajo:** sale de las herramientas usadas. Editar archivos es «construir»; ejecutar código, tests, git, el navegador o el ordenador es «probar»; leer y buscar es «leer»; mensajes, planes, subagentes y skills es «coordinar». Las órdenes de terminal se distinguen por su primera palabra.
 - **Modelo sugerido:** los hilos que sobre todo conversan y los que su nombre empieza por una palabra de juicio se quedan en el modelo más capaz; el resto va al más barato. Es una regla práctica, no una medición de calidad.
 
+## Cómo se entera de tus hilos
+
+ThreadEyes no guarda ninguna lista de hilos ni recuerda nada entre una ejecución y otra. Cada vez que se ejecuta lee los registros que hay en el disco en ese momento y lo rehace todo, siempre con las mismas reglas:
+
+| Qué pasa | Qué hace ThreadEyes |
+|:---|:---|
+| Empiezas un hilo nuevo | Aparece la próxima vez que se ejecute, en cuanto el hilo tenga actividad. No hay que darlo de alta |
+| El hilo no tiene nombre | Va a «Hilos sin nombre» de su carpeta |
+| Le cambias el nombre | Manda el último nombre: todo su historial pasa al nombre nuevo (usa `aliases` para juntar un nombre antiguo) |
+| Lo relevas («Docs · relevo 3») | Cuenta como el mismo hilo |
+| Lo archivas en la aplicación | Sigue contando: sus registros siguen en el disco |
+| Se borran sus registros (tú o la limpieza de Claude Code) | Desaparece, y con él su gasto pasado |
+| Lleva tiempo sin usarse | Sale de la ventana de semanas que se mira (8 por defecto) |
+
+**No se ejecuta solo.** El panel dice de cuándo son sus datos y trae la orden exacta para actualizarlo; una página web no puede leer tus registros, así que el panel no puede actualizarse solo. Para tenerlo al día, ejecuta esa orden cuando quieras o prográmala con el programador de tareas de tu sistema (cron, launchd o el Programador de tareas de Windows).
+
 ## Lo que no hace (léelo)
 
 - **El dinero solo sirve para comparar.** Es gasto ponderado con precios de la API. Con suscripción Pro o Max **no** es lo que pagas.

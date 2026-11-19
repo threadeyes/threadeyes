@@ -46,6 +46,8 @@ tr.clic{cursor:pointer}.d-div{color:var(--warn);font-weight:600}.d-cam{color:var
 </style></head><body><main>
 <h1 id="h1"></h1>
 <div class="sub" id="periodo"></div>
+<div class="sub" id="gen"><span id="genTxt"></span> <code id="cmd" style="word-break:break-all"></code> <button id="cmdBtn" class="btn"></button></div>
+<div id="cmdOk" class="sub" style="display:none"></div>
 <div class="grid kpis" id="kpis"></div>
 <div class="warnbox" id="nochart" hidden></div>
 <nav id="menu"></nav>
@@ -99,6 +101,15 @@ const chart = (el, cfg) => HAS_CHART ? new Chart(el, cfg) : null;
 document.title = 'ThreadEyes · ' + T.p_title;
 $('h1').textContent = T.p_title;
 $('periodo').textContent = fmt(T.p_period, {start: D.since, end: D.today, threads: D.rows.length, weeks: D.weeks.length});
+// The page cannot refresh itself (a browser cannot read the logs): it says when its data is from and how to refresh it.
+$('genTxt').textContent = fmt(T.p_generated, {when: D.generated});
+$('cmd').textContent = D.cmd;
+$('cmdBtn').textContent = T.p_copy_cmd;
+$('cmdBtn').onclick = async () => {
+  try { await navigator.clipboard.writeText(D.cmd); $('cmdOk').textContent = T.p_cmd_copied; }
+  catch (e) { $('cmdOk').innerHTML = esc(T.p_copy_fail) + '<br><textarea style="width:100%;height:60px">' + esc(D.cmd) + '</textarea>'; }
+  $('cmdOk').style.display = 'block';
+};
 $('menu').innerHTML = [['tiempo', T.p_tab_time], ['ahorro', T.p_tab_saving], ['hilos', T.p_tab_threads], ['secciones', T.p_tab_sections]]
   .map((x, i) => `<button data-t="${x[0]}"${i ? '' : ' class="on"'}>${esc(x[1])}</button>`).join('');
 [['t1','p_weeks_title'],['s1','p_weeks_sub'],['t2','p_days_title'],['s2','p_days_sub'],['t3','p_top_title'],['s3','p_top_sub'],

@@ -523,6 +523,21 @@ def default_logs_dir():
     return os.path.join(root, 'projects')
 
 
+def rerun_command(args, weeks, lang, cfg_path):
+    """The exact command that rebuilds this panel, valid from any folder: every path is absolute.
+    It is only shown in the user's own panel, on their own computer."""
+    def q(s):
+        s = str(s)
+        return f'"{s}"' if (not s or re.search(r'[\s"\'&|<>^()$;`]', s)) else s
+    exe = os.path.splitext(os.path.basename(sys.executable or ''))[0] or 'python'
+    parts = [exe, os.path.abspath(__file__), '--out', os.path.abspath(args.out), '--weeks', str(weeks), '--lang', lang]
+    if cfg_path:
+        parts += ['--config', os.path.abspath(cfg_path)]
+    if args.logs:
+        parts += ['--logs', os.path.abspath(args.logs)]
+    return ' '.join(q(p) for p in parts)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog='threadeyes', description='Spend per Claude Code thread, from your local logs. Nothing leaves your computer.')
     ap.add_argument('--out', default='threadeyes-output', help='folder for the report and the panel (default: ./threadeyes-output)')
@@ -539,7 +554,8 @@ def main(argv=None):
             pass
 
     try:
-        cfg = load_config(find_config(args.config))
+        cfg_path = find_config(args.config)
+        cfg = load_config(cfg_path)
         weeks = args.weeks if args.weeks is not None else int(cfg['weeks'])
         re.compile(cfg['relay_pattern'])
     except (ConfigError, ValueError, TypeError, re.error) as e:
@@ -568,7 +584,10 @@ def main(argv=None):
     os.makedirs(args.out, exist_ok=True)
     write_report(os.path.join(args.out, 'threadeyes-report.md'), rows, weeks, since_list, today, per_day, tx)
     texts = {k: v for k, v in tx.items() if k.startswith('p_')}
-    panel.write(os.path.join(args.out, 'threadeyes-panel.html'), panel_data(rows, weeks, since_list, today, per_day, tx), texts, lang)
+    data = panel_data(rows, weeks, since_list, today, per_day, tx)
+    data['generated'] = dt.datetime.now().strftime('%d/%m/%Y %H:%M')
+    data['cmd'] = rerun_command(args, weeks, lang, cfg_path)
+    panel.write(os.path.join(args.out, 'threadeyes-panel.html'), data, texts, lang)
     T = sum(r['total'] for r in rows) or 1
     print(tx['md_done'].format(n=len(rows), pct=f"{100 * sum(r['saving'] for r in rows) / T:.0f}"))
     print(os.path.abspath(args.out))

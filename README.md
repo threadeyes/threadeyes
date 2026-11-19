@@ -66,6 +66,22 @@ If your names differ, copy `threadeyes.example.json` to `threadeyes.json` (next 
 - **Type of work** comes from the tools used: editing files is "build"; running code, tests, git, the browser or the computer is "test"; reading and searching is "read"; messages, plans, sub-agents and skills are "coordinate". Shell commands are told apart by their first word.
 - **Suggested model:** threads that mostly talk, and threads whose name starts with a judgment keyword, stay on the most capable model; the rest go to the cheaper one. It is a rule of thumb, not a measurement of quality.
 
+## How it finds your threads
+
+ThreadEyes keeps no list of threads and no memory between runs. Every time it runs it reads the logs that are on disk at that moment and rebuilds everything, always with the same rules:
+
+| What happens | What ThreadEyes does |
+|:---|:---|
+| You start a new thread | It shows up the next time ThreadEyes runs, once the thread has some activity. Nothing to register |
+| The thread has no name | It goes to "Unnamed threads" of its folder |
+| You rename it | The last name wins: its whole history moves to the new name (use `aliases` to join an old name) |
+| You hand it off ("Docs · relevo 3") | Counted as the same thread |
+| You archive it in the app | Still counted: its logs are still on disk |
+| Its logs are deleted (by you or by Claude Code's clean-up) | It disappears, and its past spend with it |
+| It has not been used for a while | It leaves the window of weeks being looked at (8 by default) |
+
+**It does not run by itself.** The panel shows when its data is from and the exact command to refresh it; a web page cannot read your logs, so the panel cannot refresh itself. To keep it up to date, run that command whenever you want, or schedule it with your system's task scheduler (cron, launchd or Windows Task Scheduler).
+
 ## What it will not do (read this)
 
 - **The money is only a way to compare.** It is spend weighted with API prices. With a Pro or Max subscription it is **not** what you pay.
