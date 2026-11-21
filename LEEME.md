@@ -83,7 +83,7 @@ ThreadEyes no guarda ninguna lista de hilos ni recuerda nada entre una ejecució
 | Se borran sus registros (tú o la limpieza de Claude Code) | Desaparece, y con él su gasto pasado |
 | Lleva tiempo sin usarse | Sale de la ventana de semanas que se mira (8 por defecto) |
 
-**No se ejecuta solo.** El panel dice de cuándo son sus datos y las opciones para actualizarlo, sin ningún nombre de carpeta; la orden exacta, con tus carpetas, sale en la terminal cuando ThreadEyes termina. Una página web no puede leer tus registros, así que el panel no puede actualizarse solo. Para tenerlo al día, ejecuta esa orden cuando quieras o prográmala con el programador de tareas de tu sistema (cron, launchd o el Programador de tareas de Windows).
+**No se ejecuta solo.** El panel dice de cuándo son sus datos y las opciones para actualizarlo, sin ningún nombre de carpeta; la orden exacta, con tus carpetas, sale en la terminal cuando ThreadEyes termina (escrita para PowerShell en Windows, y para sh o bash en macOS, Linux y Git Bash). Una página web no puede leer tus registros, así que el panel no puede actualizarse solo. Para tenerlo al día, ejecuta esa orden cuando quieras o prográmala con el programador de tareas de tu sistema (cron, launchd o el Programador de tareas de Windows).
 
 ## Lo que no hace (léelo)
 

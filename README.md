@@ -83,7 +83,7 @@ ThreadEyes keeps no list of threads and no memory between runs. Every time it ru
 | Its logs are deleted (by you or by Claude Code's clean-up) | It disappears, and its past spend with it |
 | It has not been used for a while | It leaves the window of weeks being looked at (8 by default) |
 
-**It does not run by itself.** The panel shows when its data is from and the options to refresh it, without any folder name; the exact command, with your folders, is printed in the terminal when ThreadEyes finishes. A web page cannot read your logs, so the panel cannot refresh itself. To keep it up to date, run that command whenever you want, or schedule it with your system's task scheduler (cron, launchd or Windows Task Scheduler).
+**It does not run by itself.** The panel shows when its data is from and the options to refresh it, without any folder name; the exact command, with your folders, is printed in the terminal when ThreadEyes finishes (written for PowerShell on Windows, and for sh or bash on macOS, Linux and Git Bash). A web page cannot read your logs, so the panel cannot refresh itself. To keep it up to date, run that command whenever you want, or schedule it with your system's task scheduler (cron, launchd or Windows Task Scheduler).
 
 ## What it will not do (read this)
 

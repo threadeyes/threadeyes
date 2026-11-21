@@ -123,6 +123,17 @@ class Robustness(Base):
                 self.assertNotIn('nan', r.stdout.lower())
                 self.assertNotIn('nan%', r.report.lower())
 
+    def test_integer_too_large_for_a_float(self):
+        """Codex, second round: 10**309 as a token count is ignored; as a price it is a clean config error."""
+        raw = json.dumps(msg('m', title='Docs')).replace('"input_tokens": 100', '"input_tokens": ' + str(10 ** 309))
+        r = self.run_te({'s.jsonl': [raw, msg('n', title='Docs')]})
+        self.assertClean(r)
+        bad = '{"prices": {"opus": {"in": ' + str(10 ** 309) + '}}}'
+        c = self.run_te({'s.jsonl': [msg('m', title='Docs')]}, config=bad)
+        self.assertEqual(c.code, 2, c.stderr)
+        self.assertNotIn('Traceback', c.stderr)
+        self.assertIn('Config error', c.stderr)
+
     def test_unknown_model_is_declared_once_per_message(self):
         """A message of an unknown model written as three lines (three content blocks) is one message."""
         lines = [msg('m', model='some-new-model', title='Docs', tools=[tool(f't{i}', 'Read')]) for i in range(3)]
@@ -190,6 +201,14 @@ class Money(Base):
         self.assertEqual(flipped.data()['saving'], 0)
         self.assertIn('Simulated saving', flipped.report)
 
+    def test_saving_uses_every_price_not_only_output(self):
+        """Codex, second round: 1M input tokens on Opus, no output; input 4 on Opus and 3.8 on Sonnet: 5 %, not 50 %."""
+        usage = {'input_tokens': 1_000_000, 'output_tokens': 0, 'cache_creation_input_tokens': 0, 'cache_read_input_tokens': 0}
+        files = {'s.jsonl': [msg('m', model='claude-opus-5-5', usage=usage, tools=[tool('t', 'Edit')], title='Build docs')]}
+        r = self.run_te(files, config={'prices': {'opus': {'in': 4}, 'sonnet': {'in': 3.8}}})
+        self.assertClean(r)
+        self.assertAlmostEqual(r.data()['saving'], 5.0, places=6)
+
     def test_one_hour_cache_costs_twice_the_input(self):
         five = threadeyes.cost('opus', 'claude-opus-5-5', {'cache_creation_input_tokens': 1_000_000}, threadeyes.DEFAULT_CONFIG)
         hour = threadeyes.cost('opus', 'claude-opus-5-5', {'cache_creation_input_tokens': 1_000_000, 'cache_1h': 1_000_000},
@@ -256,6 +275,26 @@ class Privacy(Base):
         self.assertTrue(last.startswith('To refresh, run:'))
         self.assertIn(sys.executable, last)
         self.assertIn(r.out, last)
+
+    @unittest.skipUnless(os.name == 'nt' and not os.environ.get('MSYSTEM'), 'the command is written for PowerShell only on Windows')
+    def test_refresh_command_works_pasted_in_powershell(self):
+        """Codex, second round: folders named with $ and ' must survive being pasted into PowerShell."""
+        with tempfile.TemporaryDirectory() as d:
+            logs = os.path.join(d, "Synthetic $Draft logs")
+            out = os.path.join(d, "out `n it's $HOME")
+            os.makedirs(os.path.join(logs, 'proj'))
+            with open(os.path.join(logs, 'proj', 's.jsonl'), 'w', encoding='utf-8') as f:
+                f.write(json.dumps(msg('m', title='Docs')) + '\n')
+            p = subprocess.run([sys.executable, '-B', SCRIPT, '--logs', logs, '--out', out, '--lang', 'en'],
+                               capture_output=True, text=True, encoding='utf-8', errors='replace')
+            self.assertEqual(p.returncode, 0, p.stderr)
+            command = p.stdout.strip().splitlines()[-1].split('To refresh, run: ', 1)[1]
+            report = os.path.join(out, 'threadeyes-report.md')
+            os.remove(report)
+            ps = subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-Command', command],
+                                capture_output=True, text=True, encoding='utf-8', errors='replace', cwd=d)
+            self.assertEqual(ps.returncode, 0, ps.stdout + ps.stderr)
+            self.assertTrue(os.path.exists(report), 'the pasted command did not rebuild the report in the same folder')
 
     def test_panel_loads_nothing_from_outside(self):
         r = self.run_te({'s.jsonl': [msg('m', title='Docs')]})

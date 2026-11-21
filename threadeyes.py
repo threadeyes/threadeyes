@@ -23,6 +23,7 @@ import json
 import math
 import os
 import re
+import shlex
 import sys
 import unicodedata
 from collections import defaultdict
@@ -62,6 +63,7 @@ FAMILIES = ('fable', 'opus', 'sonnet', 'haiku')
 USAGE_FIELDS = ('input_tokens', 'output_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens', 'cache_1h')
 PRICE_KEYS = ('in', 'out', 'cr')
 MAX_WEEKS = 520  # ten years: far more than Claude Code keeps, and safe for date arithmetic
+MAX_PRICE = 1_000_000  # USD per million tokens; any real price is far below
 
 # --------------------------------------------------------------------------- what a tool call means
 CLASSES = ('build', 'test', 'read', 'coordinate')
@@ -132,7 +134,13 @@ def check_config(cfg, path):
         return isinstance(x, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in x.items())
 
     def number(x):
-        return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and x >= 0
+        # A price per million tokens: from 0 to a million. Comparing first means an integer too large to
+        # become a float is rejected here instead of crashing later.
+        if isinstance(x, bool) or not isinstance(x, (int, float)):
+            return False
+        if isinstance(x, float) and not math.isfinite(x):
+            return False
+        return 0 <= x <= MAX_PRICE
     problems = []
     if not isinstance(cfg['language'], str):
         problems.append('"language" must be text')
@@ -155,7 +163,7 @@ def check_config(cfg, path):
                                              all(k in PRICE_KEYS and number(v) for k, v in p.items())
                                              for f, p in prices.items())):
         problems.append('"prices" must look like {"opus": {"in": 4, "out": 20, "cr": 0.2}}: families '
-                        + ', '.join(FAMILIES) + '; keys in, out, cr; numbers of 0 or more')
+                        + ', '.join(FAMILIES) + '; keys in, out, cr; numbers from 0 to 1,000,000')
     if problems:
         raise ConfigError(f'{path}: ' + '; '.join(problems))
 
@@ -184,11 +192,17 @@ def family(model):
     return None
 
 
+MAX_TOKENS = 10 ** 12  # no real message comes near this; anything above is a damaged record
+
+
 def num(x):
-    """A token count: a finite number of 0 or more; anything else (text, NaN, infinity, negative) counts as 0."""
+    """A token count: a number from 0 to MAX_TOKENS. Anything else (text, NaN, infinity, negative, or an
+    integer too large even to convert to a float) counts as 0 instead of stopping the run."""
     if isinstance(x, bool) or not isinstance(x, (int, float)):
         return 0
-    return x if math.isfinite(x) and x >= 0 else 0
+    if isinstance(x, float) and not math.isfinite(x):
+        return 0
+    return x if 0 <= x <= MAX_TOKENS else 0
 
 
 def family_price(fam, cfg):
@@ -368,7 +382,7 @@ def read_sessions(base, since, cfg, tx, coverage):
                                 continue
                             seen_tools.add(tid)
                         tools.append(tool_class(b))
-                    note = [t.date(), fam, 0.0, tools, t]
+                    note = [t.date(), fam, 0.0, tools, t, None]
                     s['notes'].append(note)
                     if not any(usage.values()):
                         continue
@@ -383,6 +397,7 @@ def read_sessions(base, since, cfg, tx, coverage):
                     mid = msg.get('id')
                     if not isinstance(mid, str) or not mid:
                         note[2] = cost(fam, model, usage, cfg)  # no id: cannot tell repeats apart
+                        note[5] = dict(usage)
                     elif mid in seen:
                         u = seen[mid][2]  # the same message again: keep the largest figure of each field
                         for k in USAGE_FIELDS:
@@ -394,6 +409,7 @@ def read_sessions(base, since, cfg, tx, coverage):
             continue
     for note, model, usage in seen.values():
         note[2] = cost(note[1], model, usage, cfg)
+        note[5] = usage  # kept to simulate the same work at another model's prices
     return sessions
 
 
@@ -409,11 +425,12 @@ def build_threads(sessions, weeks, since, cfg, tx):
         key = (' '.join(name.casefold().split()), home)
         h = threads.setdefault(key, {'name': name, 'home': home, 'wk': [0.0] * weeks, 'fam': defaultdict(float),
                                      'tools': defaultdict(int), 'turns': 0, 'sessions': 0,
-                                     'last': None, 'rel': [], 'now': None, 'now_at': None})
+                                     'last': None, 'rel': [], 'now': None, 'now_at': None,
+                                     'usage': {k: 0 for k in USAGE_FIELDS}})
         h['sessions'] += 1
         sf, st = defaultdict(float), defaultdict(int)
         sc = 0.0
-        for day, fam, c, tools, at in s['notes']:
+        for day, fam, c, tools, at, u in s['notes']:
             sc += c
             if fam:
                 sf[fam] += c
@@ -427,7 +444,10 @@ def build_threads(sessions, weeks, since, cfg, tx):
             last = max((a for a in s['notes'] if a[1]), key=lambda a: a[4], default=None)
             if last and (h['now_at'] is None or last[4] >= h['now_at']):
                 h['now'], h['now_at'] = last[1], last[4]
-        for day, fam, c, tools, at in s['notes']:
+        for day, fam, c, tools, at, u in s['notes']:
+            if u:
+                for k_ in USAGE_FIELDS:
+                    h['usage'][k_] += u[k_]
             k = (monday(day) - since).days // 7
             if 0 <= k < weeks:
                 h['wk'][k] += c
@@ -486,10 +506,13 @@ def analyse(threads, cfg):
         # weeks would have weighed at the suggested model's price. A simulation, not money back.
         now = h['now'] or used
         saving, costly = 0.0, []
-        p_now, p_reco = family_price(now, cfg)['out'], family_price(reco, cfg)['out']
-        if p_now > 0 and p_reco < p_now:
-            saving = total * (1 - p_reco / p_now)
-            costly.append(now)
+        # The same tokens (input, cache writes and reads, output) priced at the suggested model, with the
+        # user's prices: the saving is what the thread cost minus that, never below zero.
+        if reco != now:
+            simulated = cost(reco, None, h['usage'], cfg)
+            if simulated < total:
+                saving = total - simulated
+                costly.append(now)
         if len(strong) >= 2 and len(h['rel']) >= 3 and distance >= 0.15 and not is_scheduled(name, cfg):
             diag = 'split'
         elif saving > 0 or (len(strong) >= 2 and now != reco):
@@ -627,10 +650,10 @@ def rerun_command(args, weeks, lang, cfg_path, full):
     """The command that rebuilds the outputs.
     full=True: the exact command, with the Python actually used and every path absolute, so it works from
     any folder. It is only printed in the terminal, never written into the files (they promise no paths).
-    full=False: the same options without any path, safe to show in the panel."""
-    def q(s):
-        s = str(s)
-        return '"' + s.replace('"', '\\"') + '"' if (not s or re.search(r'[\s"\'&|<>^()$;`%!]', s)) else s
+    full=False: the same options without any path, safe to show in the panel.
+    The exact command is written for the shell the user most likely pastes it into: PowerShell on Windows
+    (single quotes, so $ and ` stay literal, and & to run a quoted program), and sh/bash elsewhere or in
+    Git Bash on Windows (shlex quoting). Every path is quoted, so nothing in a folder name is interpreted."""
     if not full:
         return ' '.join(['python', 'threadeyes.py', '--weeks', str(weeks), '--lang', lang])
     parts = [sys.executable or 'python', os.path.abspath(__file__), '--out', os.path.abspath(args.out),
@@ -639,7 +662,10 @@ def rerun_command(args, weeks, lang, cfg_path, full):
         parts += ['--config', os.path.abspath(cfg_path)]
     if args.logs:
         parts += ['--logs', os.path.abspath(args.logs)]
-    return ' '.join(q(p) for p in parts)
+    if os.name == 'nt' and not os.environ.get('MSYSTEM'):
+        ps = lambda s: s if s.startswith('--') else "'" + s.replace("'", "''") + "'"
+        return '& ' + ' '.join(ps(str(p)) for p in parts)
+    return ' '.join(shlex.quote(str(p)) for p in parts)
 
 
 def main(argv=None):
