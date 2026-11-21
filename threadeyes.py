@@ -360,10 +360,17 @@ def read_sessions(base, since, cfg, tx, coverage):
                     msg = d.get('message')
                     if not isinstance(msg, dict) or msg.get('role') != 'assistant':
                         continue
+                    if 'timestamp' not in d:
+                        # Claude Code also writes other records with an assistant message and no time (for
+                        # example "api-request-blob"), with no token counts: skipped, and not damage. If one
+                        # did carry tokens, losing them must be declared.
+                        if any(usage_of(msg).values()):
+                            coverage['unreadable'] += 1
+                        continue
                     try:
                         t = dt.datetime.fromisoformat(d['timestamp'].replace('Z', '+00:00')).astimezone()
                     except Exception:
-                        coverage['unreadable'] += 1
+                        coverage['unreadable'] += 1  # a time that is there but cannot be read: damaged
                         continue
                     if t.date() < since:
                         continue

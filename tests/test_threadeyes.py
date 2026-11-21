@@ -114,6 +114,22 @@ class Robustness(Base):
         self.assertClean(r)
         self.assertIn('Not everything could be counted', r.report)
 
+    def test_records_without_time_are_not_damage(self):
+        """Found on real logs: lines like {"type": "api-request-blob", "message": {...}} have no time and no
+        tokens. They are skipped silently; the coverage note must not call them unreadable."""
+        blob = {'type': 'api-request-blob', 'hash': 'abc', 'sessionId': 's',
+                'message': {'role': 'assistant', 'content': [{'type': 'text', 'text': 'x'}]}}
+        r = self.run_te({'s.jsonl': [blob, blob, msg('m', title='Docs')]})
+        self.assertClean(r)
+        self.assertNotIn('Not everything could be counted', r.report)
+        self.assertNotIn('unreadable', r.stdout)
+        # But a line with tokens and no time is damage, and is declared.
+        lost = msg('x', title='Docs')
+        del lost['timestamp']
+        r2 = self.run_te({'s.jsonl': [lost, msg('m', title='Docs')]})
+        self.assertClean(r2)
+        self.assertIn('1 unreadable log lines were skipped', r2.report)
+
     def test_nan_and_infinite_tokens(self):
         for value in ('NaN', 'Infinity', '-1'):
             with self.subTest(value=value):
