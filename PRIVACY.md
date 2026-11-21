@@ -19,7 +19,9 @@ Only two files, in the output folder (`threadeyes-output` by default):
 - `threadeyes-report.md`
 - `threadeyes-panel.html`
 
-They contain: thread names, the last folder name of each working directory, dates, spend as percentages only (of the total or of a normal week, never an amount), model names and the share of tool types (build, test, read, coordinate). They do **not** contain conversation text, commands, file contents or file paths other than the last folder name.
+They contain: thread names, the last folder name of each working directory, dates, spend as percentages only (of the total or of a normal week, never an amount), model names and the share of tool types (build, test, read, coordinate). They do **not** contain conversation text, commands, file contents or file paths other than the last folder name. Thread and folder names are written as plain text: a name can never turn into a link, an image or code in the report or the panel.
+
+When it finishes, ThreadEyes **prints in the terminal** the exact command to refresh the outputs, with your folders. That command is not saved anywhere; the panel only shows the options, without folders.
 
 **Be careful when you share them or take screenshots:** thread names and folder names can be revealing. Check them first. The demo data in `examples/` is invented.
 

@@ -16,7 +16,7 @@ La mayoría de herramientas de uso listan las sesiones por su primer mensaje o p
 
 - Gasto por hilo, por semana y por día, frente a una semana normal: ves qué hilo se come la cuota y qué día se dispara.
 - Qué hace cada hilo: construir, probar, leer o coordinar.
-- Un modelo sugerido por hilo y el ahorro si lo sigues. Sugiere; decides tú.
+- Un modelo sugerido por hilo y un ahorro simulado si lo sigues. Sugiere; decides tú.
 - Un panel en tu navegador (HTML, funciona sin internet) y un informe en Markdown.
 - Inglés y español.
 
@@ -65,6 +65,9 @@ Si tus nombres son otros, copia `threadeyes.example.json` a `threadeyes.json` (j
 - **Cada mensaje se cuenta una vez.** Claude Code escribe una línea de registro por cada bloque de contenido (texto, llamada a herramienta...) del mismo mensaje, y cada una repite el consumo de tokens del mensaje. ThreadEyes cuenta el coste de un mensaje una sola vez, por su identificador. Las llamadas a herramientas se cuentan una a una.
 - **Tipo de trabajo:** sale de las herramientas usadas. Editar archivos es «construir»; ejecutar código, tests, git, el navegador o el ordenador es «probar»; leer y buscar es «leer»; mensajes, planes, subagentes y skills es «coordinar». Las órdenes de terminal se distinguen por su primera palabra.
 - **Modelo sugerido:** los hilos que sobre todo conversan y los que su nombre empieza por una palabra de juicio se quedan en el modelo más capaz; el resto va al más barato. Es una regla práctica, no una medición de calidad.
+- **Ahorro simulado:** lo que habrían pesado estas semanas a precios de la API con el modelo sugerido, con tus propios precios si los has puesto. Es una simulación: no demuestra que el modelo más barato hubiera hecho igual de bien el trabajo y, con suscripción, no es dinero que recuperes.
+- **Caché:** leer de la caché y escribir en ella se cobran aparte; las escrituras que duran una hora cuestan más que las de cinco minutos, y los registros dicen cuál es cuál.
+- **Cobertura:** si alguna línea de registro no se puede leer o es de un modelo que ThreadEyes no conoce, se deja fuera y el informe y el panel dicen cuántas.
 
 ## Cómo se entera de tus hilos
 
@@ -80,17 +83,25 @@ ThreadEyes no guarda ninguna lista de hilos ni recuerda nada entre una ejecució
 | Se borran sus registros (tú o la limpieza de Claude Code) | Desaparece, y con él su gasto pasado |
 | Lleva tiempo sin usarse | Sale de la ventana de semanas que se mira (8 por defecto) |
 
-**No se ejecuta solo.** El panel dice de cuándo son sus datos y trae la orden exacta para actualizarlo; una página web no puede leer tus registros, así que el panel no puede actualizarse solo. Para tenerlo al día, ejecuta esa orden cuando quieras o prográmala con el programador de tareas de tu sistema (cron, launchd o el Programador de tareas de Windows).
+**No se ejecuta solo.** El panel dice de cuándo son sus datos y las opciones para actualizarlo, sin ningún nombre de carpeta; la orden exacta, con tus carpetas, sale en la terminal cuando ThreadEyes termina. Una página web no puede leer tus registros, así que el panel no puede actualizarse solo. Para tenerlo al día, ejecuta esa orden cuando quieras o prográmala con el programador de tareas de tu sistema (cron, launchd o el Programador de tareas de Windows).
 
 ## Lo que no hace (léelo)
 
 - **El dinero solo sirve para comparar.** Es gasto ponderado con precios de la API. Con suscripción Pro o Max **no** es lo que pagas.
-- **La tabla de precios es fija** (del 03/11/2026) y puede estar desactualizada. Compárala con la página de precios de Anthropic y cámbiala en la configuración si hace falta.
+- **La tabla de precios es fija** (comprobada el 19/11/2026) y puede estar desactualizada. Compárala con la página de precios de Anthropic y cámbiala en la configuración si hace falta.
 - **Depende del formato de los registros de Claude Code,** que no es una interfaz pública ni estable. Si Claude Code lo cambia, ThreadEyes puede dejar de leerlos hasta que se actualice.
 - **Claude Code puede borrar registros antiguos.** Su documentación dice que guarda las conversaciones 30 días por defecto (ajuste `cleanupPeriodDays`), así que la historia que ve ThreadEyes es la que siga en el disco.
 - **No cambia nada.** Solo lee y escribe sus dos archivos de salida. Sugiere un modelo; aplicarlo es cosa tuya.
 - **Los hilos sin nombre** (nunca usaste `/rename`) se agrupan por carpeta y son menos precisos.
 - Desarrollado y probado en Windows. Debería funcionar en macOS y Linux, pero no se ha probado allí.
+
+## Compruébalo tú
+
+Las pruebas usan solo registros inventados y no dejan nada:
+
+```bash
+python tests/test_threadeyes.py
+```
 
 ## Privacidad
 

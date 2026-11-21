@@ -1,15 +1,15 @@
-# Spend per thread, 8 weeks (from 28/09 to 17/11/2026)
+# Spend per thread, 8 weeks (from 28/09 to 21/11/2026)
 
-> **Possible saving from today if every thread moves from the model it uses now to the suggested one (computed on the spend of these weeks): 36% of the spend.**
+> **Simulated saving: if every thread had used the suggested model instead of the one it uses now, these weeks would have weighed 36% less at API prices. It is a simulation, not money back: with a subscription you pay the same.**
 > - **Checkout redesign** (shop-app): now on opus, move to sonnet; would save 19% of the total.
 > - **API migration** (shop-api): now on opus, move to sonnet; would save 16% of the total.
 > - **Release notes** (shop-docs): now on opus, move to sonnet; would save 2% of the total.
 
 ## Model suggestions, from most to least saving
 
-- **Checkout redesign**: move from opus to sonnet (build and test; saves 18.6% of the total). Diagnosis: switch model.
-- **API migration**: move from opus to sonnet (build and test; saves 15.9% of the total). Diagnosis: switch model.
-- **Release notes**: move from opus to sonnet (coordinate; saves 1.8% of the total). Diagnosis: switch model.
+- **Checkout redesign**: move from opus to sonnet (build and test; saves 18.8% of the total). Diagnosis: switch model.
+- **API migration**: move from opus to sonnet (build and test; saves 15.8% of the total). Diagnosis: switch model.
+- **Release notes**: move from opus to sonnet (coordinate; saves 1.9% of the total). Diagnosis: switch model.
 
 ## How to read it
 
@@ -24,13 +24,13 @@
 | **Week of** | **Spend vs a normal week** | |
 |:---|---:|:---|
 | 28/09 | 40% | `█████` |
-| 05/10 | 53% | `███████` |
-| 12/10 | 78% | `██████████` |
-| 19/10 | 106% | `█████████████` |
-| 26/10 | 161% | `████████████████████` |
-| 02/11 | 128% | `████████████████` |
-| 09/11 | 134% | `█████████████████` |
-| 16/11 (in progress) | 41% | `█████` |
+| 05/10 | 52% | `███████` |
+| 12/10 | 80% | `██████████` |
+| 19/10 | 107% | `█████████████` |
+| 26/10 | 160% | `████████████████████` |
+| 02/11 | 129% | `████████████████` |
+| 09/11 | 133% | `█████████████████` |
+| 16/11 (in progress) | 134% | `█████████████████` |
 
 ## Day by day, last two weeks
 
@@ -38,41 +38,41 @@
 
 | **Day** | **Spend vs a normal day** | |
 |:---|---:|:---|
-| Wed 04/11 | 156% | `██████████████████` |
-| Thu 05/11 | 144% | `████████████████` |
-| Fri 06/11 | 137% | `████████████████` |
-| Sat 07/11 | 139% | `████████████████` |
 | Sun 08/11 | 0% | `` |
-| Mon 09/11 | 146% | `█████████████████` |
-| Tue 10/11 | 157% | `██████████████████` |
-| Wed 11/11 | 148% | `█████████████████` |
-| Thu 12/11 | 156% | `██████████████████` |
-| Fri 13/11 | 176% | `████████████████████` |
-| Sat 14/11 | 158% | `██████████████████` |
+| Mon 09/11 | 130% | `██████████████` |
+| Tue 10/11 | 151% | `████████████████` |
+| Wed 11/11 | 160% | `█████████████████` |
+| Thu 12/11 | 156% | `█████████████████` |
+| Fri 13/11 | 163% | `██████████████████` |
+| Sat 14/11 | 170% | `███████████████████` |
 | Sun 15/11 | 0% | `` |
-| Mon 16/11 | 129% | `███████████████` |
-| Tue 17/11 | 156% | `██████████████████` |
+| Mon 16/11 | 139% | `███████████████` |
+| Tue 17/11 | 170% | `███████████████████` |
+| Wed 18/11 | 139% | `███████████████` |
+| Thu 19/11 | 143% | `████████████████` |
+| Fri 20/11 | 166% | `██████████████████` |
+| Sat 21/11 | 183% | `████████████████████` |
 
 ## By section
 
 | **Section** | **Share of total spend** | **Timeline** |
 |:---|---:|:---|
-| shop-app | 47.2% | `▂▃▃▄█▆▆▂` |
-| shop-api | 40.2% | `▂▂▅▆█▇█▂` |
-| shop-docs | 9.4% | `▁▃▆▅▇█▇▂` |
-| data-tools | 3.2% | `·▄▄▇█▄▄▂` |
+| shop-app | 47.0% | `▂▃▃▄█▆▆▆` |
+| shop-api | 40.3% | `▂▂▅▆█▇█▇` |
+| shop-docs | 9.4% | `▁▃▆▆██▇▆` |
+| data-tools | 3.4% | `·▄▄█▇▄▄█` |
 
 ## By thread
 
 | **Thread** | **Section** | **Share of total spend** | **Timeline** | **Hand-offs** | **Last used** | **Type of work** | **What it does (%) B/T/R/C** | **Fable** | **Opus** | **Sonnet** | **Haiku** | **Suggested** |
 |:---|:---|---:|:---|:---:|:---:|:---|:---:|---:|---:|---:|---:|:---:|
-| Checkout redesign | shop-app | 37.3% | `▂▂▃▅█▇▆▂` | 5 | 17/11 | Build and test | 46/23/26/5 | · | 100% | · | · | sonnet **← change (now opus)** |
-| API migration | shop-api | 31.9% | `▁▂▄▆▇▆█▂` | 4 | 17/11 | Build and test | 51/35/9/6 | · | 100% | · | · | sonnet **← change (now opus)** |
-| Bug triage | shop-app | 10.0% | `▄▄▄▂█▄▆▁` | 6 | 17/11 | Build and test | 17/31/41/11 | · | 67% | 33% | · | sonnet · **2** |
-| Architecture review | shop-api | 8.3% | `▃▃▅▅█▅▅▂` | 2 | 17/11 | Research | 9/8/61/22 | · | 100% | · | · | opus |
-| Docs site | shop-docs | 5.7% | `▂▅▅▅▇▅█▂` | 3 | 17/11 | Build and test | 36/12/45/7 | · | · | 100% | · | sonnet |
-| Release notes | shop-docs | 3.6% | `··▄▄▄█▄▁` | 1 | 16/11 | Coordinate | 4/7/14/75 | · | 100% | · | · | sonnet **← change (now opus)** |
-| Data cleanup | data-tools | 3.2% | `·▄▄▇█▄▄▂` | 2 | 17/11 | Build and test | 37/18/34/11 | · | · | 100% | · | sonnet |
+| Checkout redesign | shop-app | 37.6% | `▂▂▃▅█▇▆▇` | 5 | 21/11 | Build and test | 47/23/25/5 | · | 100% | · | · | sonnet **← change (now opus)** |
+| API migration | shop-api | 31.7% | `▁▂▄▆▇▇█▇` | 4 | 21/11 | Build and test | 49/37/9/5 | · | 100% | · | · | sonnet **← change (now opus)** |
+| Bug triage | shop-app | 9.4% | `▄▄▄▃█▄▆▄` | 6 | 21/11 | Build and test | 16/29/45/10 | · | 62% | 38% | · | sonnet · **2** |
+| Architecture review | shop-api | 8.6% | `▃▂▄▅█▅▅█` | 2 | 21/11 | Research | 9/9/65/16 | · | 100% | · | · | opus |
+| Docs site | shop-docs | 5.7% | `▂▅▅▅█▅█▅` | 3 | 21/11 | Build and test | 36/10/44/10 | · | · | 100% | · | sonnet |
+| Release notes | shop-docs | 3.7% | `··▄▄▄█▄▄` | 1 | 21/11 | Coordinate | 2/2/24/71 | · | 100% | · | · | sonnet **← change (now opus)** |
+| Data cleanup | data-tools | 3.4% | `·▄▄█▇▄▄█` | 2 | 21/11 | Build and test | 47/17/27/9 | · | · | 100% | · | sonnet |
 
 ---
 

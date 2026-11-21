@@ -20,6 +20,7 @@ import argparse
 import datetime as dt
 import glob
 import json
+import math
 import os
 import re
 import sys
@@ -34,9 +35,11 @@ import panel  # noqa: E402
 __version__ = '0.1.0'
 
 # --------------------------------------------------------------------------- prices
-# API prices, USD per million tokens. A static table dated 2026-11-03: CHECK IT against Anthropic's
-# pricing page and override it in the config file ("prices") if it is out of date.
-# Cache writes are counted at 1.25 x the input price. They only serve to weigh models against each other.
+# API prices, USD per million tokens, checked on 2026-11-19 against
+# https://platform.claude.com/docs/en/about-claude/pricing. A static table: override it in the config
+# file ("prices") if it is out of date. Cache writes are 1.25 x the input price when they last five
+# minutes and 2 x when they last one hour (the logs say which). Haiku's dearer tier for prompts over
+# 100,000 tokens is not applied. They only serve to weigh models against each other.
 PRICES = {
     'opus':   {'in': 4.0, 'out': 20.0, 'cr': 0.20},
     'sonnet': {'in': 2.0, 'out': 10.0, 'cr': 0.10},
@@ -56,7 +59,9 @@ EXACT_PRICES = {
     'haiku-4':  {'in': 1.0, 'out': 5.0, 'cr': 0.10},
 }
 FAMILIES = ('fable', 'opus', 'sonnet', 'haiku')
-USAGE_FIELDS = ('input_tokens', 'output_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens')
+USAGE_FIELDS = ('input_tokens', 'output_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens', 'cache_1h')
+PRICE_KEYS = ('in', 'out', 'cr')
+MAX_WEEKS = 520  # ten years: far more than Claude Code keeps, and safe for date arithmetic
 
 # --------------------------------------------------------------------------- what a tool call means
 CLASSES = ('build', 'test', 'read', 'coordinate')
@@ -114,7 +119,45 @@ def load_config(path):
         if unknown:
             print(f'Warning: unknown config keys ignored: {", ".join(sorted(unknown))}', file=sys.stderr)
         cfg.update({k: v for k, v in user.items() if k in DEFAULT_CONFIG})
+        check_config(cfg, path)
     return cfg
+
+
+def check_config(cfg, path):
+    """Refuse a config whose values have the wrong shape, with a clear message instead of a crash later."""
+    def strs(x):
+        return isinstance(x, list) and all(isinstance(i, str) for i in x)
+
+    def str_map(x):
+        return isinstance(x, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in x.items())
+
+    def number(x):
+        return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and x >= 0
+    problems = []
+    if not isinstance(cfg['language'], str):
+        problems.append('"language" must be text')
+    if not (isinstance(cfg['weeks'], int) and not isinstance(cfg['weeks'], bool)):
+        problems.append('"weeks" must be a whole number')
+    for key in ('projects', 'aliases'):
+        if not str_map(cfg[key]):
+            problems.append(f'"{key}" must be an object of text to text')
+    groups = cfg['merge_groups']
+    if not (isinstance(groups, list) and all(isinstance(g, dict) and isinstance(g.get('name'), str)
+                                             and strs(g.get('contains_all')) for g in groups)):
+        problems.append('"merge_groups" must be a list of {"name": text, "contains_all": [text, ...]}')
+    for key in ('judgment_keywords', 'scheduled_prefixes'):
+        if not strs(cfg[key]):
+            problems.append(f'"{key}" must be a list of text')
+    if not isinstance(cfg['relay_pattern'], str):
+        problems.append('"relay_pattern" must be text')
+    prices = cfg['prices']
+    if not (isinstance(prices, dict) and all(f in PRICES and isinstance(p, dict) and
+                                             all(k in PRICE_KEYS and number(v) for k, v in p.items())
+                                             for f, p in prices.items())):
+        problems.append('"prices" must look like {"opus": {"in": 4, "out": 20, "cr": 0.2}}: families '
+                        + ', '.join(FAMILIES) + '; keys in, out, cr; numbers of 0 or more')
+    if problems:
+        raise ConfigError(f'{path}: ' + '; '.join(problems))
 
 
 def find_config(explicit):
@@ -142,7 +185,17 @@ def family(model):
 
 
 def num(x):
-    return x if isinstance(x, (int, float)) and not isinstance(x, bool) else 0
+    """A token count: a finite number of 0 or more; anything else (text, NaN, infinity, negative) counts as 0."""
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
+        return 0
+    return x if math.isfinite(x) and x >= 0 else 0
+
+
+def family_price(fam, cfg):
+    """Price of a model family after the user's overrides."""
+    p = dict(PRICES[fam])
+    p.update((cfg.get('prices') or {}).get(fam, {}))
+    return p
 
 
 def cost(fam, model, usage, cfg):
@@ -153,14 +206,26 @@ def cost(fam, model, usage, cfg):
             p = dict(price)
             break
     p.update((cfg.get('prices') or {}).get(fam, {}))
+    written = num(usage.get('cache_creation_input_tokens'))
+    hour = min(num(usage.get('cache_1h')), written)  # one-hour cache writes cost 2 x input, five-minute ones 1.25 x
     return (num(usage.get('input_tokens')) * p['in']
-            + num(usage.get('cache_creation_input_tokens')) * p['in'] * 1.25
+            + (written - hour) * p['in'] * 1.25 + hour * p['in'] * 2
             + num(usage.get('cache_read_input_tokens')) * p['cr']
             + num(usage.get('output_tokens')) * p['out']) / 1e6
 
 
+def usage_of(msg):
+    """The token counts of a message, including how much of the cache it wrote for one hour."""
+    usage = msg.get('usage') if isinstance(msg.get('usage'), dict) else {}
+    out = {k: num(usage.get(k)) for k in USAGE_FIELDS if k != 'cache_1h'}
+    cc = usage.get('cache_creation')
+    out['cache_1h'] = num(cc.get('ephemeral_1h_input_tokens')) if isinstance(cc, dict) else 0
+    return out
+
+
 def tool_class(block):
-    n = block.get('name', '')
+    n = block.get('name')
+    n = n if isinstance(n, str) else ''
     if n in EDIT_TOOLS:
         return 'build'
     if n in READ_TOOLS:
@@ -170,7 +235,9 @@ def tool_class(block):
     if 'Browser' in n or 'chrome' in n or 'computer' in n or 'preview' in n:
         return 'test'
     if n in ('Bash', 'PowerShell'):
-        cmd = (block.get('input') or {}).get('command') or ''
+        inp = block.get('input')
+        cmd = inp.get('command') if isinstance(inp, dict) else None
+        cmd = cmd if isinstance(cmd, str) else ''
         for part in re.split(r'&&|;|\|', cmd):
             part = part.strip()
             if not part:
@@ -220,8 +287,13 @@ def is_judgment(name, cfg):
 
 
 def cell(s):
-    """Text safe inside a Markdown table cell or list item."""
-    return str(s).replace('|', '\\|').replace('\r', ' ').replace('\n', ' ')
+    """Text from the logs (thread and folder names), made inert inside Markdown: it shows as written and
+    can never become a link, an image, HTML or table structure in any viewer."""
+    s = str(s).replace('\r', ' ').replace('\n', ' ')
+    s = s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    s = re.sub(r'([\\`*_\[\]()!|~])', r'\\\1', s)
+    # Bare web addresses are turned into links by some viewers: break the pattern without changing the text.
+    return re.sub(r'(?i)(://|www\.)', lambda m: m.group(1).replace('/', '&#47;').replace('.', '&#46;'), s)
 
 
 def sparkline(vals):
@@ -238,15 +310,18 @@ def monday(d):
 
 
 # --------------------------------------------------------------------------- reading the logs
-def read_sessions(base, since, cfg, tx):
-    """One entry per session: title, working folders and one note per assistant turn."""
+def read_sessions(base, since, cfg, tx, coverage):
+    """One entry per session: title, working folders and one note per assistant line.
+    A note is [day, family, cost, tool classes, exact time]. `coverage` counts what could not be used."""
     sessions = {}
     # Claude Code writes ONE line per content block (text, tool call...) of the same assistant message,
     # each carrying the message's full token usage. Counting every line would multiply that message's cost
     # by its number of blocks, so the cost of a message (identified by message.id) is counted once.
-    # Tool calls are still counted per line, because each line holds one call. Resumed sessions copy
-    # earlier messages into the new file; the first copy found (files in sorted order) keeps the cost.
+    # Resumed sessions copy earlier lines into the new file: the first copy found (files in sorted order)
+    # keeps the cost, and a tool call is counted once by its own id, however many copies there are.
     seen = {}
+    seen_tools = set()
+    unknown = set()
     paths = sorted(glob.glob(os.path.join(glob.escape(base), '**', '*.jsonl'), recursive=True))
     for path in paths:
         parts = os.path.relpath(path, base).split(os.sep)
@@ -258,8 +333,11 @@ def read_sessions(base, since, cfg, tx):
                     try:
                         d = json.loads(line)
                     except ValueError:
+                        if line.strip():
+                            coverage['unreadable'] += 1
                         continue
                     if not isinstance(d, dict):
+                        coverage['unreadable'] += 1
                         continue
                     if isinstance(d.get('customTitle'), str) and d['customTitle'].strip():
                         s['title'] = d['customTitle']
@@ -271,17 +349,36 @@ def read_sessions(base, since, cfg, tx):
                     try:
                         t = dt.datetime.fromisoformat(d['timestamp'].replace('Z', '+00:00')).astimezone()
                     except Exception:
+                        coverage['unreadable'] += 1
                         continue
                     if t.date() < since:
                         continue
                     model = msg.get('model')
-                    fam = family(model if isinstance(model, str) else None)
-                    usage = msg.get('usage') if isinstance(msg.get('usage'), dict) else {}
+                    model = model if isinstance(model, str) else None
+                    fam = family(model)
+                    usage = usage_of(msg)
                     blocks = msg.get('content') if isinstance(msg.get('content'), list) else []
-                    tools = [tool_class(b) for b in blocks if isinstance(b, dict) and b.get('type') == 'tool_use']
-                    note = [t.date(), fam, 0.0, tools]
+                    tools = []
+                    for b in blocks:
+                        if not (isinstance(b, dict) and b.get('type') == 'tool_use'):
+                            continue
+                        tid = b.get('id')
+                        if isinstance(tid, str) and tid:
+                            if tid in seen_tools:
+                                continue
+                            seen_tools.add(tid)
+                        tools.append(tool_class(b))
+                    note = [t.date(), fam, 0.0, tools, t]
                     s['notes'].append(note)
-                    if not (fam and usage):
+                    if not any(usage.values()):
+                        continue
+                    if not fam:
+                        # Spend of a model ThreadEyes does not know: not counted, and declared once per message.
+                        mid = msg.get('id')
+                        key_ = mid if isinstance(mid, str) and mid else f'{path}:{len(s["notes"])}'
+                        if key_ not in unknown:
+                            unknown.add(key_)
+                            coverage['unknown_model'] += 1
                         continue
                     mid = msg.get('id')
                     if not isinstance(mid, str) or not mid:
@@ -289,10 +386,11 @@ def read_sessions(base, since, cfg, tx):
                     elif mid in seen:
                         u = seen[mid][2]  # the same message again: keep the largest figure of each field
                         for k in USAGE_FIELDS:
-                            u[k] = max(num(u.get(k)), num(usage.get(k)))
+                            u[k] = max(u[k], usage[k])
                     else:
-                        seen[mid] = (note, model, {k: num(usage.get(k)) for k in USAGE_FIELDS})
+                        seen[mid] = (note, model, dict(usage))
         except OSError:
+            coverage['unreadable_files'] += 1
             continue
     for note, model, usage in seen.values():
         note[2] = cost(note[1], model, usage, cfg)
@@ -311,11 +409,11 @@ def build_threads(sessions, weeks, since, cfg, tx):
         key = (' '.join(name.casefold().split()), home)
         h = threads.setdefault(key, {'name': name, 'home': home, 'wk': [0.0] * weeks, 'fam': defaultdict(float),
                                      'tools': defaultdict(int), 'turns': 0, 'sessions': 0,
-                                     'last': None, 'rel': [], 'now': None, 'now_day': None})
+                                     'last': None, 'rel': [], 'now': None, 'now_at': None})
         h['sessions'] += 1
         sf, st = defaultdict(float), defaultdict(int)
         sc = 0.0
-        for day, fam, c, tools in s['notes']:
+        for day, fam, c, tools, at in s['notes']:
             sc += c
             if fam:
                 sf[fam] += c
@@ -325,11 +423,11 @@ def build_threads(sessions, weeks, since, cfg, tx):
             nt = sum(st.values()) or 1
             h['rel'].append({'date': min(a[0] for a in s['notes']), 'fam': max(sf, key=sf.get), 'cost': sc,
                              'rep': {k: st.get(k, 0) / nt for k in CLASSES}})
-            last = max(s['notes'], key=lambda a: a[0])
-            last_fam = next((a[1] for a in reversed(s['notes']) if a[1]), None)
-            if last_fam and (h['now_day'] is None or last[0] >= h['now_day']):
-                h['now'], h['now_day'] = last_fam, last[0]
-        for day, fam, c, tools in s['notes']:
+            # The model the thread uses NOW: the latest line by its exact time, whatever the file order.
+            last = max((a for a in s['notes'] if a[1]), key=lambda a: a[4], default=None)
+            if last and (h['now_at'] is None or last[4] >= h['now_at']):
+                h['now'], h['now_at'] = last[1], last[4]
+        for day, fam, c, tools, at in s['notes']:
             k = (monday(day) - since).days // 7
             if 0 <= k < weeks:
                 h['wk'][k] += c
@@ -384,11 +482,13 @@ def analyse(threads, cfg):
         if len(strong) >= 2:
             a_, b_ = groups[strong[0][1]], groups[strong[1][1]]
             distance = max(abs(a_['rep'][k_] / a_['c'] - b_['rep'][k_] / b_['c']) for k_ in CLASSES)
-        # The saving is measured from the model the thread uses NOW, not from its history.
+        # Simulated saving, from the model the thread uses NOW and with the user's own prices: what these
+        # weeks would have weighed at the suggested model's price. A simulation, not money back.
         now = h['now'] or used
         saving, costly = 0.0, []
-        if PRICES[reco]['out'] < PRICES[now]['out']:
-            saving = total * (1 - PRICES[reco]['out'] / PRICES[now]['out'])
+        p_now, p_reco = family_price(now, cfg)['out'], family_price(reco, cfg)['out']
+        if p_now > 0 and p_reco < p_now:
+            saving = total * (1 - p_reco / p_now)
             costly.append(now)
         if len(strong) >= 2 and len(h['rel']) >= 3 and distance >= 0.15 and not is_scheduled(name, cfg):
             diag = 'split'
@@ -405,7 +505,7 @@ def analyse(threads, cfg):
 
 
 # --------------------------------------------------------------------------- output
-def write_report(path, rows, weeks, since_list, today, per_day, tx):
+def write_report(path, rows, weeks, since_list, today, per_day, tx, note=''):
     T = sum(r['total'] for r in rows) or 1
     saving = sum(r['saving'] for r in rows)
     wk_tot = [sum(r['wk'][k] for r in rows) for k in range(weeks)]
@@ -435,7 +535,7 @@ def write_report(path, rows, weeks, since_list, today, per_day, tx):
                                                         diag=tx['diag_' + r['diag']].lower()))
     if not recos:
         L.append('- ' + tx['md_none'])
-    L += ['', f"## {tx['md_how_title']}", '', '> ' + tx['md_how'], '', '---', '',
+    L += ['', f"## {tx['md_how_title']}", '', '> ' + tx['md_how']] + (['>', '> ' + note] if note else []) + ['', '---', '',
           f"## {tx['md_weeks_title']}", '', '> ' + tx['md_weeks_note'], '',
           f"| **{tx['md_col_week']}** | **{tx['md_col_vs_week']}** | |", '|:---|---:|:---|']
     complete = wk_tot[:-1] if weeks > 1 else wk_tot
@@ -523,14 +623,18 @@ def default_logs_dir():
     return os.path.join(root, 'projects')
 
 
-def rerun_command(args, weeks, lang, cfg_path):
-    """The exact command that rebuilds this panel, valid from any folder: every path is absolute.
-    It is only shown in the user's own panel, on their own computer."""
+def rerun_command(args, weeks, lang, cfg_path, full):
+    """The command that rebuilds the outputs.
+    full=True: the exact command, with the Python actually used and every path absolute, so it works from
+    any folder. It is only printed in the terminal, never written into the files (they promise no paths).
+    full=False: the same options without any path, safe to show in the panel."""
     def q(s):
         s = str(s)
-        return f'"{s}"' if (not s or re.search(r'[\s"\'&|<>^()$;`]', s)) else s
-    exe = os.path.splitext(os.path.basename(sys.executable or ''))[0] or 'python'
-    parts = [exe, os.path.abspath(__file__), '--out', os.path.abspath(args.out), '--weeks', str(weeks), '--lang', lang]
+        return '"' + s.replace('"', '\\"') + '"' if (not s or re.search(r'[\s"\'&|<>^()$;`%!]', s)) else s
+    if not full:
+        return ' '.join(['python', 'threadeyes.py', '--weeks', str(weeks), '--lang', lang])
+    parts = [sys.executable or 'python', os.path.abspath(__file__), '--out', os.path.abspath(args.out),
+             '--weeks', str(weeks), '--lang', lang]
     if cfg_path:
         parts += ['--config', os.path.abspath(cfg_path)]
     if args.logs:
@@ -563,8 +667,8 @@ def main(argv=None):
         return 2
     lang = args.lang or (cfg['language'] if cfg['language'] in i18n.LANGS else i18n.detect_language())
     tx = i18n.texts(lang)
-    if weeks < 2:
-        ap.error('weeks must be 2 or more (the day-by-day view covers the last two weeks)')
+    if not 2 <= weeks <= MAX_WEEKS:
+        ap.error(f'weeks must be between 2 and {MAX_WEEKS} (the day-by-day view covers the last two weeks)')
     base = args.logs or default_logs_dir()
     if not os.path.isdir(base):
         print(f"{tx['err_no_logs']} {base}", file=sys.stderr)
@@ -574,24 +678,42 @@ def main(argv=None):
     since_list = [monday(today) - dt.timedelta(weeks=k) for k in range(weeks - 1, -1, -1)]
     since = since_list[0]
 
-    sessions = read_sessions(base, since, cfg, tx)
+    coverage = defaultdict(int)
+    sessions = read_sessions(base, since, cfg, tx, coverage)
     threads, per_day = build_threads(sessions, weeks, since, cfg, tx)
     rows = analyse(threads, cfg)
     if not rows:
         print(tx['err_no_data'].format(weeks=weeks, base=base), file=sys.stderr)
         return 3
 
+    note = coverage_note(coverage, tx)
     os.makedirs(args.out, exist_ok=True)
-    write_report(os.path.join(args.out, 'threadeyes-report.md'), rows, weeks, since_list, today, per_day, tx)
+    write_report(os.path.join(args.out, 'threadeyes-report.md'), rows, weeks, since_list, today, per_day, tx, note)
     texts = {k: v for k, v in tx.items() if k.startswith('p_')}
     data = panel_data(rows, weeks, since_list, today, per_day, tx)
     data['generated'] = dt.datetime.now().strftime('%d/%m/%Y %H:%M')
-    data['cmd'] = rerun_command(args, weeks, lang, cfg_path)
+    data['cmd'] = rerun_command(args, weeks, lang, cfg_path, full=False)
+    data['coverage'] = note
     panel.write(os.path.join(args.out, 'threadeyes-panel.html'), data, texts, lang)
     T = sum(r['total'] for r in rows) or 1
     print(tx['md_done'].format(n=len(rows), pct=f"{100 * sum(r['saving'] for r in rows) / T:.0f}"))
+    if note:
+        print(note)
     print(os.path.abspath(args.out))
+    print(tx['cli_rerun'] + ' ' + rerun_command(args, weeks, lang, cfg_path, full=True))
     return 0
+
+
+def coverage_note(coverage, tx):
+    """One sentence on what could not be counted, or '' when everything was read."""
+    parts = []
+    if coverage['unknown_model']:
+        parts.append(tx['cov_unknown_model'].format(n=coverage['unknown_model']))
+    if coverage['unreadable']:
+        parts.append(tx['cov_unreadable'].format(n=coverage['unreadable']))
+    if coverage['unreadable_files']:
+        parts.append(tx['cov_unreadable_files'].format(n=coverage['unreadable_files']))
+    return (tx['cov_title'] + ' ' + '; '.join(parts) + '.') if parts else ''
 
 
 if __name__ == '__main__':

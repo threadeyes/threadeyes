@@ -11,6 +11,7 @@ import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CHART_JS = os.path.join(HERE, 'vendor', 'chart.umd.min.js')
+CHART_LICENSE = os.path.join(HERE, 'vendor', 'LICENSE-chartjs.txt')
 
 TEMPLATE = r"""<!doctype html>
 <html lang="__LANG__"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -86,6 +87,7 @@ tr.clic{cursor:pointer}.d-div{color:var(--warn);font-weight:600}.d-cam{color:var
 </section>
 
 <p class="sub" style="margin-top:18px" id="pie"></p>
+<p class="sub" id="cobertura" hidden></p>
 </main>
 <script>__CHARTJS__</script>
 <script>
@@ -104,6 +106,7 @@ $('periodo').textContent = fmt(T.p_period, {start: D.since, end: D.today, thread
 // The page cannot refresh itself (a browser cannot read the logs): it says when its data is from and how to refresh it.
 $('genTxt').textContent = fmt(T.p_generated, {when: D.generated});
 $('cmd').textContent = D.cmd;
+if (D.coverage) { $('cobertura').hidden = false; $('cobertura').textContent = D.coverage; }
 $('cmdBtn').textContent = T.p_copy_cmd;
 $('cmdBtn').onclick = async () => {
   try { await navigator.clipboard.writeText(D.cmd); $('cmdOk').textContent = T.p_cmd_copied; }
@@ -223,17 +226,29 @@ table('tSec', [{k: 'name', t: T.p_col_section}, {k: 'total', t: T.p_col_share, n
 
 
 def _chart_js():
+    """Chart.js with its full MIT notice in front, as its licence requires for every copy."""
     try:
         with open(CHART_JS, encoding='utf-8') as f:
-            return f.read().replace('</script', '<\\/script')
+            code = f.read().replace('</script', '<\\/script')
     except OSError:
         return ''
+    try:
+        with open(CHART_LICENSE, encoding='utf-8') as f:
+            notice = f.read().replace('*/', '* /').strip()
+    except OSError:
+        notice = 'Chart.js 4.4.1, MIT License, (c) 2014-2024 Chart.js Contributors.'
+    return '/*! Chart.js v4.4.1, bundled unchanged with ThreadEyes. Licence:\n\n' + notice + '\n*/\n' + code
 
 
 def write(path, data, texts, lang):
     """Write the panel to `path`. `data` and `texts` are plain dicts."""
     def js(obj):
-        return json.dumps(obj, ensure_ascii=False).replace('</', '<\\/')
+        # Inside <script> no text from the logs may close the block, open a comment or form markup:
+        # every <, > and & becomes a \u escape, which JSON reads back as the same character.
+        s = json.dumps(obj, ensure_ascii=False)
+        for ch, esc_ in (('<', '\\u003c'), ('>', '\\u003e'), ('&', '\\u0026'), (' ', '\\u2028'), (' ', '\\u2029')):
+            s = s.replace(ch, esc_)
+        return s
     parts = {'LANG': lang, 'CHARTJS': _chart_js(), 'DATA': js(data), 'TEXTS': js(texts)}
     # One single pass, so a thread called "__DATA__" cannot be substituted twice.
     page = re.sub(r'__(LANG|CHARTJS|DATA|TEXTS)__', lambda m: parts[m.group(1)], TEMPLATE)

@@ -16,7 +16,7 @@ Most usage tools list sessions by their first message or by project. ThreadEyes 
 
 - Spend per thread, per week and per day, against a normal week, so you can see which thread eats your quota and the day it spikes.
 - What each thread does: build, test, read or coordinate.
-- A suggested model per thread, and the saving if you follow it. It suggests; you decide.
+- A suggested model per thread, and a simulated saving if you follow it. It suggests; you decide.
 - A panel in your browser (HTML, works offline) and a Markdown report.
 - English and Spanish.
 
@@ -65,6 +65,9 @@ If your names differ, copy `threadeyes.example.json` to `threadeyes.json` (next 
 - **Each message is counted once.** Claude Code writes one log line per content block (text, tool call...) of the same message, each repeating the message's token usage. ThreadEyes counts a message's cost once, by its id. Tool calls are counted per call.
 - **Type of work** comes from the tools used: editing files is "build"; running code, tests, git, the browser or the computer is "test"; reading and searching is "read"; messages, plans, sub-agents and skills are "coordinate". Shell commands are told apart by their first word.
 - **Suggested model:** threads that mostly talk, and threads whose name starts with a judgment keyword, stay on the most capable model; the rest go to the cheaper one. It is a rule of thumb, not a measurement of quality.
+- **Simulated saving:** what these weeks would have weighed at API prices with the suggested model, using your own prices if you set them. It is a simulation: it does not prove the cheaper model would have done the work as well, and with a subscription it is not money you get back.
+- **Cache:** reading from the cache and writing to it are priced apart; writes that last one hour cost more than those that last five minutes, and the logs say which is which.
+- **Coverage:** if some log lines cannot be read, or come from a model ThreadEyes does not know, they are left out and the report and the panel say how many.
 
 ## How it finds your threads
 
@@ -80,17 +83,25 @@ ThreadEyes keeps no list of threads and no memory between runs. Every time it ru
 | Its logs are deleted (by you or by Claude Code's clean-up) | It disappears, and its past spend with it |
 | It has not been used for a while | It leaves the window of weeks being looked at (8 by default) |
 
-**It does not run by itself.** The panel shows when its data is from and the exact command to refresh it; a web page cannot read your logs, so the panel cannot refresh itself. To keep it up to date, run that command whenever you want, or schedule it with your system's task scheduler (cron, launchd or Windows Task Scheduler).
+**It does not run by itself.** The panel shows when its data is from and the options to refresh it, without any folder name; the exact command, with your folders, is printed in the terminal when ThreadEyes finishes. A web page cannot read your logs, so the panel cannot refresh itself. To keep it up to date, run that command whenever you want, or schedule it with your system's task scheduler (cron, launchd or Windows Task Scheduler).
 
 ## What it will not do (read this)
 
 - **The money is only a way to compare.** It is spend weighted with API prices. With a Pro or Max subscription it is **not** what you pay.
-- **The price table is static** (dated 2026-11-03) and may be out of date. Check it against Anthropic's pricing page and override it in the config if needed.
+- **The price table is static** (checked on 2026-11-19) and may be out of date. Check it against Anthropic's pricing page and override it in the config if needed.
 - **It depends on Claude Code's log format,** which is not a public, stable interface. If Claude Code changes it, ThreadEyes may stop reading until it is updated.
 - **Claude Code may delete old logs.** Its documentation says conversations are kept 30 days by default (setting `cleanupPeriodDays`), so the history ThreadEyes can see is limited to what is still on disk.
 - **It does not change anything.** It only reads and writes its two output files. It suggests a model; applying it is up to you.
 - **Threads without a name** (you never used `/rename`) are grouped by folder, so they are less precise.
 - Developed and tested on Windows. It should work on macOS and Linux but has not been tested there.
+
+## Check it yourself
+
+The tests use invented logs only and leave nothing behind:
+
+```bash
+python tests/test_threadeyes.py
+```
 
 ## Privacy
 

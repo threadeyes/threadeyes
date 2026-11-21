@@ -19,7 +19,9 @@ Solo dos archivos, en la carpeta de salida (`threadeyes-output` por defecto):
 - `threadeyes-report.md`
 - `threadeyes-panel.html`
 
-Contienen: nombres de hilos, el nombre de la última carpeta de cada directorio de trabajo, fechas, el gasto solo en porcentajes (del total o de una semana normal, nunca un importe), nombres de modelos y el reparto de tipos de acción (construir, probar, leer, coordinar). **No** contienen texto de conversaciones, órdenes, contenido de archivos ni rutas aparte del nombre de la última carpeta.
+Contienen: nombres de hilos, el nombre de la última carpeta de cada directorio de trabajo, fechas, el gasto solo en porcentajes (del total o de una semana normal, nunca un importe), nombres de modelos y el reparto de tipos de acción (construir, probar, leer, coordinar). **No** contienen texto de conversaciones, órdenes, contenido de archivos ni rutas aparte del nombre de la última carpeta. Los nombres de hilos y carpetas se escriben como texto: un nombre nunca puede convertirse en un enlace, una imagen o código en el informe o el panel.
+
+Al terminar, ThreadEyes **escribe en la terminal** la orden exacta para actualizar las salidas, con tus carpetas. Esa orden no se guarda en ningún sitio; el panel solo enseña las opciones, sin carpetas.
 
 **Cuidado al compartirlos o al hacer capturas:** los nombres de hilos y de carpetas pueden delatar. Revísalos antes. Los datos de `examples/` son inventados.
 
