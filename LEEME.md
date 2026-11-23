@@ -91,6 +91,7 @@ ThreadEyes no guarda ninguna lista de hilos ni recuerda nada entre una ejecució
 - **La tabla de precios es fija** (comprobada el 19/11/2026) y puede estar desactualizada. Compárala con la página de precios de Anthropic y cámbiala en la configuración si hace falta.
 - **Depende del formato de los registros de Claude Code,** que no es una interfaz pública ni estable. Si Claude Code lo cambia, ThreadEyes puede dejar de leerlos hasta que se actualice.
 - **Claude Code puede borrar registros antiguos.** Su documentación dice que guarda las conversaciones 30 días por defecto (ajuste `cleanupPeriodDays`), así que la historia que ve ThreadEyes es la que siga en el disco.
+- **El tipo de trabajo es una estimación.** Los comandos de terminal se juzgan solo por su primera palabra, así que uno que escribe archivos puede contar como probar o leer, y la parte de construir puede salir más baja de lo que es.
 - **No cambia nada.** Solo lee y escribe sus dos archivos de salida. Sugiere un modelo; aplicarlo es cosa tuya.
 - **Los hilos sin nombre** (nunca usaste `/rename`) se agrupan por carpeta y son menos precisos.
 - Desarrollado y probado en Windows. Debería funcionar en macOS y Linux, pero no se ha probado allí.

@@ -91,6 +91,7 @@ ThreadEyes keeps no list of threads and no memory between runs. Every time it ru
 - **The price table is static** (checked on 2026-11-19) and may be out of date. Check it against Anthropic's pricing page and override it in the config if needed.
 - **It depends on Claude Code's log format,** which is not a public, stable interface. If Claude Code changes it, ThreadEyes may stop reading until it is updated.
 - **Claude Code may delete old logs.** Its documentation says conversations are kept 30 days by default (setting `cleanupPeriodDays`), so the history ThreadEyes can see is limited to what is still on disk.
+- **The type of work is an estimate.** Shell commands are judged only by their first word, so a command that writes files can count as testing or reading, and the build share can come out lower than it really is.
 - **It does not change anything.** It only reads and writes its two output files. It suggests a model; applying it is up to you.
 - **Threads without a name** (you never used `/rename`) are grouped by folder, so they are less precise.
 - Developed and tested on Windows. It should work on macOS and Linux but has not been tested there.
