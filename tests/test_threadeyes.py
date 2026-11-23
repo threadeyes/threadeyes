@@ -232,6 +232,12 @@ class Money(Base):
         self.assertAlmostEqual(five, 5.0)
         self.assertAlmostEqual(hour, 8.0)
 
+    def test_sonnet_5_5_reads_cost_its_own_price(self):
+        """Found on real logs: the key 'sonnet-5' also matched 'sonnet-5-5' and charged its cache reads double."""
+        reads = {'cache_read_input_tokens': 1_000_000}
+        self.assertAlmostEqual(threadeyes.cost('sonnet', 'claude-sonnet-5-5', reads, threadeyes.DEFAULT_CONFIG), 0.10)
+        self.assertAlmostEqual(threadeyes.cost('sonnet', 'claude-sonnet-5', reads, threadeyes.DEFAULT_CONFIG), 0.20)
+
     def test_usage_reads_the_one_hour_split(self):
         u = threadeyes.usage_of({'usage': {'cache_creation_input_tokens': 10,
                                            'cache_creation': {'ephemeral_1h_input_tokens': 4, 'ephemeral_5m_input_tokens': 6}}})
